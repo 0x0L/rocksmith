@@ -1,7 +1,6 @@
 import os
 
-from .sng import decrypt_sng, encrypt_sng
-from .crypto import MAC_KEY, WIN_KEY
+from .crypto import decrypt_sng, encrypt_sng, MAC_KEY, WIN_KEY
 
 def path2dict(path):
     """Reads a path into a dictionary"""

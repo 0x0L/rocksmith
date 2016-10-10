@@ -1,5 +1,9 @@
+import zlib
+
 from Crypto.Cipher import AES
 from Crypto.Util import _counter as counter
+
+from construct import Int32ul
 
 ARC_KEY = bytes.fromhex('C53DB23870A1A2F71CAE64061FDD0E1157309DC85204D4C5BFDF25090DF2572C')
 ARC_IV = bytes.fromhex('E915AA018FEF71FC508132E4BB4CEB42')
@@ -11,7 +15,7 @@ PRF_KEY = bytes.fromhex('728B369E24ED0134768511021812AFC0A3C25D02065F166B4BCC58C
 CONFIG_KEY = bytes.fromhex('378B9026EE7DE70B8AF124C1E30978670F9EC8FD5E7285A86442DD73068C0473')
 
 def pad(data, blocksize=16):
-    return data + bytes(blocksize - len(data) % blocksize)
+    return data + bytes((blocksize - len(data)) % blocksize)
 
 def aes_bom():
     return AES.new(ARC_KEY, IV=ARC_IV, mode=AES.MODE_CFB, segment_size=128)
@@ -19,3 +23,18 @@ def aes_bom():
 def aes_sng(key, ivector):
     ctr = counter._newBE(b'', b'', ivector, allow_wraparound=False)
     return AES.new(key, mode=AES.MODE_CTR, counter=ctr)
+
+def decrypt_sng(data, key):
+    iv, data = data[8:24], data[24:-56]
+    decrypted = aes_sng(key, iv).decrypt(pad(data))
+    length, payload = Int32ul.parse(decrypted[:4]), decrypted[4:len(data)]
+    payload = zlib.decompress(payload)
+    assert len(payload) == length
+    return payload
+
+def encrypt_sng(data, key):
+    header = Int32ul.build(74) + Int32ul.build(3)
+    iv = bytes(16)
+    payload = Int32ul.build(len(data)) + zlib.compress(data, zlib.Z_BEST_COMPRESSION)
+    encrypted = aes_sng(key, iv).encrypt(pad(payload))[:len(payload)]
+    return header + iv + encrypted + bytes(56)
