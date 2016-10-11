@@ -1,8 +1,8 @@
 from construct import *
 
-from .crypto import decrypt_sng, encrypt_sng
-
 def array(*subcon):
+    if len(subcon) == 1:
+        return PrefixedArray(Int32ul, subcon[0])
     return PrefixedArray(Int32ul, Struct(*subcon))
 
 BEND = Struct(
@@ -10,6 +10,13 @@ BEND = Struct(
     'step' / Float32l,
     Padding(3),
     'UNK' / Int8sl
+)
+
+RECT = Struct(
+    'ymin' / Float32l,
+    'xmin' / Float32l,
+    'ymax' / Float32l,
+    'xmax' / Float32l
 )
 
 SNG = Struct(
@@ -63,8 +70,8 @@ SNG = Struct(
         ),
         'definition' / array(
             'name' / String(12, encoding='utf8'),
-            'outerRect' / Float32l[4],
-            'innerRect' / Float32l[4],
+            'outerRect' / RECT,
+            'innerRect' / RECT,
         )
     )),
     'phraseIterations' / array(
@@ -183,14 +190,3 @@ SNG = Struct(
         'maxDifficulty' / Int32sl
     )
 )
-
-class CryptoSNG(Construct):
-    def __init__(self, key):
-        self.key = key
-        super(CryptoSNG, self).__init__()
-
-    def _parse(self, stream, context, path):
-        return SNG.parse(decrypt_sng(stream.read(), self.key))
-
-    def _build(self, obj, stream, context, path):
-        stream.write(encrypt_sng(SNG.build(obj), self.key))

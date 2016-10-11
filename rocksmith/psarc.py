@@ -4,7 +4,7 @@ from hashlib import md5
 
 from construct import *
 
-from .crypto import aes_bom, pad
+from .crypto import aes_bom, pad, decrypt_psarc, encrypt_psarc
 
 class Int40(Construct):
     def _parse(self, stream, context, path):
@@ -23,19 +23,23 @@ ENTRY = Struct(
     'offset' / Int40()
 )
 
-ENTRY_SIZE = ENTRY.sizeof()
-
 class BOMAdapter(Adapter):
     def _encode(self, obj, context):
-        data = Struct('entries' / ENTRY[:], 'zlength' / Int16ub[:]).build(obj)
+        data = Struct(
+            'entries' / ENTRY[:],
+            'zlength' / Int16ub[:]
+        ).build(obj)
         return aes_bom().encrypt(pad(data))[:len(data)]
 
     def _decode(self, obj, context):
         decrypted_toc = aes_bom().decrypt(pad(obj))[:len(obj)]
-        s = Struct('entries' / ENTRY[context.n_entries], 'zlength' / Int16ub[:])
-        return s.parse(decrypted_toc)
+        return Struct(
+            'entries' / ENTRY[context.n_entries],
+            'zlength' / Int16ub[:]
+        ).parse(decrypted_toc)
 
 VERSION = 65540
+ENTRY_SIZE = ENTRY.sizeof()
 BLOCK_SIZE = 2**16
 ARCHIVE_FLAGS = 4
 
@@ -96,7 +100,7 @@ def create_entry(name, data):
         'data': output.getvalue()
     }
 
-def create_toc(entries):
+def create_bom(entries):
     offset, zindex, zlength = 0, 0, []
     for entry in entries:
         entry['offset'] = offset
@@ -111,19 +115,29 @@ def create_toc(entries):
 
     return {'entries': entries, 'zlength': zlength, 'header_size': header_size}
 
-class _PSARC(Construct):
+class PSARC(Construct):
+    def __init__(self, crypto=True):
+        super(PSARC, self).__init__()
+        self.crypto = crypto
+
     def _parse(self, stream, context, path):
         header = HEADER.parse_stream(stream)
         listing, *entries = [read_entry(stream, i, header.bom) for i in range(header.n_entries)]
         listing = listing.decode().splitlines()
-        return dict(zip(listing, entries))
+        content = dict(zip(listing, entries))
+        if self.crypto:
+            content = decrypt_psarc(content)
+        return content
 
-    def _build(self, obj, stream, context, path):
-        names = list(sorted(obj.keys(), reverse=True))
-        data = ['\n'.join(names).encode()] + [obj[k] for k in names]
+    def _build(self, content, stream, context, path):
+        if self.crypto:
+            content = encrypt_psarc(content)
+
+        names = list(sorted(content.keys(), reverse=True))
+        data = ['\n'.join(names).encode()] + [content[k] for k in names]
 
         entries = [create_entry(n, e) for n, e in zip([''] + names, data)]
-        bom = create_toc(entries)
+        bom = create_bom(entries)
 
         header = HEADER.build({
             'header_size': bom['header_size'],
@@ -134,5 +148,3 @@ class _PSARC(Construct):
         stream.write(header)
         for e in entries:
             stream.write(e['data'])
-
-PSARC = _PSARC()

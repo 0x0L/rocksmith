@@ -1,9 +1,9 @@
 import os
+import json
 
-from .crypto import decrypt_sng, encrypt_sng, MAC_KEY, WIN_KEY
+from rocksmith import PSARC, SNG
 
 def path2dict(path):
-    """Reads a path into a dictionary"""
     n = len(path) + 1
     d = {}
     for dirpath, _, filenames in os.walk(path):
@@ -14,7 +14,6 @@ def path2dict(path):
     return d
 
 def dict2path(d, dest='.'):
-    """Writes a dict into a path"""
     for filepath, data in d.items():
         filename = os.path.join(dest, filepath)
         path = os.path.dirname(filename)
@@ -23,18 +22,22 @@ def dict2path(d, dest='.'):
         with open(filename, 'wb') as fh:
             fh.write(data)
 
-def encrypt_psarc(content):
-    ## TODO profile, config
-    for k in content:
-        if 'songs/bin/macos/' in k:
-            content[k] = encrypt_sng(content[k], MAC_KEY)
-        elif 'songs/bin/generic/' in k:
-            content[k] = encrypt_sng(content[k], WIN_KEY)
+def unpack(filename, crypto):
+    with open(filename, 'rb') as fh:
+        content = PSARC(crypto).parse_stream(fh)
+    destdir = os.path.splitext(os.path.basename(filename))[0]
+    dict2path(content, destdir)
 
-def decrypt_psarc(content):
-    ## TODO profile, config
-    for k in content:
-        if 'songs/bin/macos/' in k:
-            content[k] = decrypt_sng(content[k], MAC_KEY)
-        elif 'songs/bin/generic/' in k:
-            content[k] = decrypt_sng(content[k], WIN_KEY)
+def pack(directory, crypto):
+    content = path2dict(directory)
+    dest = os.path.basename(directory) + '.psarc'
+    with open(dest, 'wb') as fh:
+        PSARC(crypto).build_stream(content, fh)
+
+def print_sng(filename):
+    with open(filename, 'rb') as fh:
+        sng = SNG.parse_stream(fh)
+        print(json.dumps(sng, indent=4))
+
+def convert(filename):
+    """TODO"""

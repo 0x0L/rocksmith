@@ -38,3 +38,23 @@ def encrypt_sng(data, key):
     payload = Int32ul.build(len(data)) + zlib.compress(data, zlib.Z_BEST_COMPRESSION)
     encrypted = aes_sng(key, iv).encrypt(pad(payload))[:len(payload)]
     return header + iv + encrypted + bytes(56)
+
+def decrypt_psarc(content):
+    ## TODO profile, config
+    content = content.copy()
+    for k in content:
+        if 'songs/bin/macos/' in k:
+            content[k] = decrypt_sng(content[k], MAC_KEY)
+        elif 'songs/bin/generic/' in k:
+            content[k] = decrypt_sng(content[k], WIN_KEY)
+    return content
+
+def encrypt_psarc(content):
+    ## TODO profile, config
+    content = content.copy()
+    for k in content:
+        if 'songs/bin/macos/' in k:
+            content[k] = encrypt_sng(content[k], MAC_KEY)
+        elif 'songs/bin/generic/' in k:
+            content[k] = encrypt_sng(content[k], WIN_KEY)
+    return content

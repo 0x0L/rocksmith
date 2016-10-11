@@ -1,69 +1,77 @@
 # rocksmith
 
-A python 3 package to deal with Rocksmith 2014 resources.
+A python 3 package to deal with Rocksmith 2014 resources
+
 
 ## Usage
 
 ```sh
 $ pyrocksmith -h
-usage: pyrocksmith [-h] [--no-crypto] [--extract PSARC] [--create DIRECTORY]
+usage: pyrocksmith [-h] [--no-crypto] [--unpack FILE] [--pack DIRECTORY]
+                   [--print-sng FILE]
 
 Command line interface to the rocksmith python package.
 
 optional arguments:
-  -h, --help          show this help message and exit
-  --no-crypto         do NOT perform cryptographic operations
-  --extract PSARC     unpack a PSARC archive
-  --create DIRECTORY  create a PSARC archive
+  -h, --help        show this help message and exit
+  --no-crypto       do not perform encryption/decryption operations
+  --unpack FILE     unpack a PSARC archive
+  --pack DIRECTORY  pack a DIRECTORY into a PSARC archive
+  --print-sng FILE  print a Rocksmith sng file as a JSON string
 ```
 
+
 ## Installation
+
+Requires Python 3
 
 ```sh
 pip3 install git+https://github.com/0x0L/rocksmith.git
 ```
 
+
 ## API
 
-To load the content of a PSARC file into memory
+`PSARC`, `SNG` can operate on buffers (`parse` / `build`) or streams (`parse_stream` / `build_stream`)
+
+### PSARC
+
+To unpack the content of a PSARC file in memory
 
 ```python
-from rocksmith import *
-content = PSARC.parse_stream(open('cherubrock_m.psarc', 'rb'))
+from rocksmith import PSARC
+content = PSARC().parse_stream(open('cherubrock_m.psarc', 'rb'))
 ```
 
-`content` is a python dict from filenames to data
+`content` is a plain python dict from file names to data. To pack a dictionary into a PSARC
 
 ```python
-print(content['appid.appid'])
+PSARC().build_stream(content, open('cherubrock_repack_m.psarc', 'wb'))
 ```
 
-The `PSARC` object does not handle the encryption/decryption of any file. To open a `sng` file in memory
+The `PSARC` object takes an optional `crypto` argument which defaults to `True`. If `crypto` is set to `False` no encryption/decryption is applied.
+
+### SNG
+
+Rocksmith songs are easily readable
 
 ```python
-sng = CryptoSNG(MAC_KEY).parse(content['songs/bin/macos/cherubrock_combo.sng'])
+from rocksmith import SNG
+sng = SNG.parse(content['songs/bin/macos/cherubrock_combo.sng'])
 ```
 
-`sng` is a dict-like container for inspecting rocksmith binary song format.
+`sng` is a dict-like container for inspecting rocksmith binary song format
 
 ```python
 print(sng['metadata'])  # or simply, print(sng.metadata)
 ```
 
-By default the command line utility does perform cryptographic operations (unless `--no-crypto`). To read an already decrypted sng file, use the `SNG` object instead of `CryptoSNG`
+Repacking `sng` is similar to repacking PSARC
 
 ```python
-sng = SNG.parse(open('./cherubrock_m/songs/bin/macos/cherubrock_combo.sng', 'rb'))
+repacked = SNG.build(sng)
 ```
 
-Repacking a PSARC file is equally easy
-
-```python
-content['songs/bin/macos/cherubrock_combo.sng'] = CryptoSNG(MAC_KEY).build(sng)
-PSARC.build_stream(content, open('cherubrock_repack_m.psarc', 'wb'))
-```
-
-`PSARC`, `SNG` and `CryptoSNG` can all operate on buffers or streams.
 
 ## TODO
 
