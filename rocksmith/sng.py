@@ -1,5 +1,6 @@
 from construct import *
 
+
 def array(*subcon):
     if len(subcon) == 1:
         return PrefixedArray(Int32ul, subcon[0])

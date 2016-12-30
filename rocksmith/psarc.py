@@ -6,6 +6,7 @@ from construct import *
 
 from .crypto import aes_bom, pad, decrypt_psarc, encrypt_psarc
 
+
 class Int40(Construct):
     def _parse(self, stream, context, path):
         return Int64ub.parse(bytes(3) + Bytes(5).parse_stream(stream))
@@ -22,6 +23,7 @@ ENTRY = Struct(
     'length' / Int40(),
     'offset' / Int40()
 )
+
 
 class BOMAdapter(Adapter):
     def _encode(self, obj, context):
@@ -55,6 +57,7 @@ HEADER = Struct(
     'bom' / BOMAdapter(Bytes(this.header_size - 32)),
 )
 
+
 def read_entry(stream, n, bom):
     entry = bom.entries[n]
     stream.seek(entry.offset)
@@ -79,6 +82,7 @@ def read_entry(stream, n, bom):
     assert(len(data) == entry.length)
     return data
 
+
 def create_entry(name, data):
     zlength = []
     output = BytesIO()
@@ -100,6 +104,7 @@ def create_entry(name, data):
         'data': output.getvalue()
     }
 
+
 def create_bom(entries):
     offset, zindex, zlength = 0, 0, []
     for entry in entries:
@@ -115,6 +120,7 @@ def create_bom(entries):
 
     return {'entries': entries, 'zlength': zlength, 'header_size': header_size}
 
+
 class PSARC(Construct):
     def __init__(self, crypto=True):
         super(PSARC, self).__init__()
@@ -122,7 +128,8 @@ class PSARC(Construct):
 
     def _parse(self, stream, context, path):
         header = HEADER.parse_stream(stream)
-        listing, *entries = [read_entry(stream, i, header.bom) for i in range(header.n_entries)]
+        listing, *entries = [read_entry(stream, i, header.bom)
+                             for i in range(header.n_entries)]
         listing = listing.decode().splitlines()
         content = dict(zip(listing, entries))
         if self.crypto:
