@@ -17,6 +17,7 @@ class Int40(Construct):
     def _sizeof(self, context, path):
         return 5
 
+
 ENTRY = Struct(
     'md5' / String(16),
     'zindex' / Int32ub,
@@ -39,6 +40,7 @@ class BOMAdapter(Adapter):
             'entries' / ENTRY[context.n_entries],
             'zlength' / Int16ub[:]
         ).parse(decrypted_toc)
+
 
 VERSION = 65540
 ENTRY_SIZE = ENTRY.sizeof()

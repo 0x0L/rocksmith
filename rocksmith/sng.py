@@ -14,10 +14,10 @@ BEND = Struct(
 )
 
 RECT = Struct(
-    'ymin' / Float32l,
-    'xmin' / Float32l,
-    'ymax' / Float32l,
-    'xmax' / Float32l
+    'y0' / Float32l,
+    'x0' / Float32l,
+    'y1' / Float32l,
+    'x1' / Float32l
 )
 
 SNG = Struct(

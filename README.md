@@ -8,7 +8,8 @@ A python 3 package to deal with Rocksmith 2014 resources
 ```sh
 $ pyrocksmith -h
 usage: pyrocksmith [-h] [--no-crypto] [--unpack FILE] [--pack DIRECTORY]
-                   [--print-sng FILE] [--wwise FILE] [--gpa FILE] [--dds FILE]
+                   [--convert FILE] [--print-sng FILE] [--wwise FILE]
+                   [--gpa FILE] [--dds FILE]
 
 Command line interface to the rocksmith python package.
 
@@ -17,6 +18,7 @@ optional arguments:
   --no-crypto       do not perform encryption/decryption operations
   --unpack FILE     unpack a PSARC archive
   --pack DIRECTORY  pack a DIRECTORY into a PSARC archive
+  --convert FILE    convert a PSARC archive between MAC and PC
   --print-sng FILE  print a Rocksmith sng file as a JSON string
   --wwise FILE      generate soundbanks from a music file
   --gpa FILE        parse GoPlayAlong xml file for synchronization
@@ -42,7 +44,7 @@ DDS generation requires ImageMagick.
 
 * Package manager: RDF graph, manifest, ...
 
-  1. Higher level view of the bunch of files
+  1. Higher level view of a psarc
   2. How to do lessons, multiple songs, etc..
 
 

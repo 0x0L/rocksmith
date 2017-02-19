@@ -5,7 +5,7 @@ Command line interface to the rocksmith python package.
 
 def main():
     import argparse
-    from rocksmith.utils import pack, unpack, print_sng
+    from rocksmith.utils import pack, unpack, convert, print_sng
     from rocksmith.wwise import generate_banks
     from rocksmith.goplayalong import read_xml
     from rocksmith.gfxassets import generate_dds
@@ -26,6 +26,10 @@ def main():
     parser.add_argument('--pack',
                         help='pack a DIRECTORY into a PSARC archive',
                         metavar=('DIRECTORY',))
+
+    parser.add_argument('--convert',
+                        help='convert a PSARC archive between MAC and PC',
+                        metavar=('FILE',))
 
     parser.add_argument('--print-sng',
                         help='print a Rocksmith sng file as a JSON string',
@@ -48,6 +52,8 @@ def main():
         unpack(args.unpack, not args.no_crypto)
     if args.pack:
         pack(args.pack, not args.no_crypto)
+    if args.convert:
+        convert(args.convert)
     if args.print_sng:
         print_sng(args.print_sng)
     if args.wwise:

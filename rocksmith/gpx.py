@@ -1,97 +1,82 @@
 from itertools import takewhile
-import struct
 
 
 class BitReader:
     def __init__(self, stream):
         self.stream = stream
-        self.position = 8
+        self.pos = -1
 
     def read_bit(self):
-        if self.position >= 8:
-            x = self.stream.read(1)
-            if not len(x):
-                x = byte(1)
-            self.current_byte = ord(x)
-            self.position = 0
+        if self.pos == -1:
+            self.buffer = ord(self.stream.read(1))
+            self.pos = 7
 
-        value = (self.current_byte >> (8 - self.position - 1)) & 0x01
-        self.position += 1
-        return value
+        value = (self.buffer >> self.pos) & 0x01
+        self.pos -= 1
+        return value > 0
 
-    def read_bits(self, count):
-        result = 0
-        for i in range(count):
-            result = result | (self.read_bit() << (count - i - 1))
-        return result
-
-    def read_byte(self):
-        return self.read_bits(8)
-
-    def read_bits_reversed(self, count):
-        result = 0
-        for i in range(count):
-            result = result | (self.read_bit() << i)
-        return result
+    def read_int(self, n, reverse=False):
+        x = 0
+        for i in reversed(range(n)) if reverse else range(n):
+            x += self.read_bit() << i
+        return x
 
 
-def filesystem(data):
-    SECTOR_SIZE = 0x1000
+def parse_BCFZ(file):
+    header = file.read(4)
+    assert header == b'BCFZ'
+
+    length = int.from_bytes(file.read(4), 'little')
+
+    br = BitReader(file)
+    buffer = []
+
+    while len(buffer) < length:
+        compressed = br.read_bit()
+        if compressed:
+            word_size = br.read_int(4, reverse=True)
+            offset = br.read_int(word_size)
+            size = br.read_int(word_size)
+            pos = len(buffer)-offset
+            buffer += buffer[pos: pos + size]
+        else:
+            size = br.read_int(2)
+            for _ in range(size):
+                buffer.append(br.read_int(8, reverse=True))
+
+    return bytes(buffer)
+
+
+def read_BCFS(data):
+    assert data[:4] == b'BCFS'
+    data = data[4:]
+
+    def int_at(pos):
+        return int.from_bytes(data[pos:pos + 4], 'little', signed=True)
+
+    def str_at(pos):
+        return bytes(takewhile(lambda x: x != 0, data[pos:])).decode()
 
     fs = {}
-    data = data[4:]  # header BCFS
-
-    def getint(pos):
-        return struct.unpack('<L', data[pos:pos + 4])[0]
-
     offset = 0
-    while offset + SECTOR_SIZE + 3 < len(data):
-        if getint(offset) == 2:
+    SECTOR_SIZE = 4096
+    while offset + SECTOR_SIZE < len(data):
+        type_ = int_at(offset)
+        name = str_at(offset + 4)
+        size = int_at(offset + 140)
+
+        if type_ == 2:
             content = b''
-            name = bytes(takewhile(lambda x: x != 0, data[offset+4:])).decode()
-            size = getint(offset + 0x8c)
-
-            blocks_offset = offset + 0x94
-
-            block_count = 0
-            block_id = getint(blocks_offset + 4 * block_count)
-            while block_id != 0:
-                offset = block_id * SECTOR_SIZE
+            sector_ptr = offset + 148
+            while True:
+                sector = int_at(sector_ptr)
+                if not sector:
+                    break
+                offset = sector * SECTOR_SIZE
                 content += data[offset: offset + SECTOR_SIZE]
-
-                block_count += 1
-                block_id = getint(blocks_offset + 4 * block_count)
-
+                sector_ptr += 4
             fs[name] = content[:size]
 
         offset += SECTOR_SIZE
 
     return fs
-
-
-def read_gpx(filename):
-    data = open(filename, 'rb')
-
-    header = data.read(4)
-    assert header == b'BCFZ'
-
-    expected_length = struct.unpack('<L', data.read(4))[0]
-
-    io = BitReader(data)
-    result = []
-
-    while len(result) < expected_length:
-        flag = io.read_bit()
-        if flag == 1:
-            word_size = io.read_bits(4)
-            offset = io.read_bits_reversed(word_size)
-            size = io.read_bits_reversed(word_size)
-            source_position = len(result) - offset
-            to_read = min([offset, size])
-            result += result[source_position: source_position + to_read]
-        else:
-            size = io.read_bits_reversed(2)
-            for i in range(size):
-                result.append(io.read_byte())
-
-    return filesystem(bytes(result))
