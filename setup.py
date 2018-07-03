@@ -25,7 +25,7 @@ setup(
     },
     install_requires=[
         'pycrypto',
-        'construct'
+        'construct==2.8.10'
     ],
     include_package_data=True,
     zip_safe=False
