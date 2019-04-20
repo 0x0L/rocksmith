@@ -42,7 +42,9 @@ def pack(directory, crypto):
 def print_sng(filename):
     with open(filename, 'rb') as fh:
         sng = SNG.parse_stream(fh)
-        print(json.dumps(sng, indent=4))
+        s = json.dumps(sng, indent=4, default=lambda _: None)
+        g = '\n'.join(l for l in s.splitlines() if '"_io"' not in l)
+        print(g)
 
 
 def _convert(data, mac2pc):
