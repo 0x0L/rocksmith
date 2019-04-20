@@ -19,7 +19,7 @@ class Int40(Construct):
 
 
 ENTRY = Struct(
-    'md5' / String(16),
+    'md5' / Bytes(16),
     'zindex' / Int32ub,
     'length' / Int40(),
     'offset' / Int40()
@@ -27,18 +27,18 @@ ENTRY = Struct(
 
 
 class BOMAdapter(Adapter):
-    def _encode(self, obj, context):
+    def _encode(self, obj, context, path):
         data = Struct(
-            'entries' / ENTRY[:],
-            'zlength' / Int16ub[:]
+            'entries' / ENTRY[context.n_entries],
+            'zlength' / GreedyRange(Int16ub)
         ).build(obj)
         return aes_bom().encrypt(pad(data))[:len(data)]
 
-    def _decode(self, obj, context):
+    def _decode(self, obj, context, path):
         decrypted_toc = aes_bom().decrypt(pad(obj))[:len(obj)]
         return Struct(
             'entries' / ENTRY[context.n_entries],
-            'zlength' / Int16ub[:]
+            'zlength' / GreedyRange(Int16ub)
         ).parse(decrypted_toc)
 
 
@@ -81,7 +81,7 @@ def read_entry(stream, n, bom):
         length += len(chunk)
 
     data = data.getvalue()
-    assert(len(data) == entry.length)
+    assert (len(data) == entry.length)
     return data
 
 
@@ -90,7 +90,7 @@ def create_entry(name, data):
     output = BytesIO()
 
     for i in range(0, len(data), BLOCK_SIZE):
-        raw = data[i: i + BLOCK_SIZE]
+        raw = data[i:i + BLOCK_SIZE]
         compressed = zlib.compress(raw, zlib.Z_BEST_COMPRESSION)
         if len(compressed) < len(raw):
             output.write(compressed)
@@ -125,13 +125,14 @@ def create_bom(entries):
 
 class PSARC(Construct):
     def __init__(self, crypto=True):
-        super(PSARC, self).__init__()
         self.crypto = crypto
+        super().__init__()
 
     def _parse(self, stream, context, path):
         header = HEADER.parse_stream(stream)
-        listing, *entries = [read_entry(stream, i, header.bom)
-                             for i in range(header.n_entries)]
+        listing, *entries = [
+            read_entry(stream, i, header.bom) for i in range(header.n_entries)
+        ]
         listing = listing.decode().splitlines()
         content = dict(zip(listing, entries))
         if self.crypto:
@@ -148,11 +149,13 @@ class PSARC(Construct):
         entries = [create_entry(n, e) for n, e in zip([''] + names, data)]
         bom = create_bom(entries)
 
-        header = HEADER.build({
-            'header_size': bom['header_size'],
-            'n_entries': len(entries),
-            'bom': bom,
-        })
+        header = HEADER.build(
+            {
+                'header_size': bom['header_size'],
+                'n_entries': len(entries),
+                'bom': bom,
+            }
+        )
 
         stream.write(header)
         for e in entries:

@@ -25,7 +25,7 @@ setup(
     entry_points={
         'console_scripts': ['pyrocksmith=rocksmith.command_line:main'],
     },
-    install_requires=['pycryptodome', 'construct==2.8.10'],
+    install_requires=['pycryptodome', 'construct'],
     include_package_data=True,
     zip_safe=False
 )
