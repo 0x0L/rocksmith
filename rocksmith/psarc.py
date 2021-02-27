@@ -1,69 +1,66 @@
 import zlib
-from io import BytesIO
 from hashlib import md5
+from io import BytesIO
 
-from construct import *
+from construct import (
+    Adapter,
+    Bytes,
+    BytesInteger,
+    Const,
+    Construct,
+    GreedyRange,
+    Int16ub,
+    Int32ub,
+    Struct,
+    this,
+)
 
-from .crypto import aes_bom, pad, decrypt_psarc, encrypt_psarc
-
-
-class Int40(Construct):
-    def _parse(self, stream, context, path):
-        return Int64ub.parse(bytes(3) + Bytes(5).parse_stream(stream))
-
-    def _build(self, obj, stream, context, path):
-        Bytes(5).build_stream(Int64ub.build(obj)[3:], stream)
-
-    def _sizeof(self, context, path):
-        return 5
-
+from .crypto import decrypt_bom, encrypt_bom, decrypt_psarc, encrypt_psarc
 
 ENTRY = Struct(
-    'md5' / Bytes(16),
-    'zindex' / Int32ub,
-    'length' / Int40(),
-    'offset' / Int40()
+    "md5" / Bytes(16),
+    "zindex" / Int32ub,
+    "length" / BytesInteger(5),
+    "offset" / BytesInteger(5),
 )
 
 
 class BOMAdapter(Adapter):
     def _encode(self, obj, context, path):
         data = Struct(
-            'entries' / ENTRY[context.n_entries],
-            'zlength' / GreedyRange(Int16ub)
+            "entries" / ENTRY[context.n_entries], "zlength" / GreedyRange(Int16ub)
         ).build(obj)
-        return aes_bom().encrypt(pad(data))[:len(data)]
+        return encrypt_bom(data)
 
     def _decode(self, obj, context, path):
-        decrypted_toc = aes_bom().decrypt(pad(obj))[:len(obj)]
+        data = decrypt_bom(obj)
         return Struct(
-            'entries' / ENTRY[context.n_entries],
-            'zlength' / GreedyRange(Int16ub)
-        ).parse(decrypted_toc)
+            "entries" / ENTRY[context.n_entries], "zlength" / GreedyRange(Int16ub)
+        ).parse(data)
 
 
 VERSION = 65540
 ENTRY_SIZE = ENTRY.sizeof()
-BLOCK_SIZE = 2**16
+BLOCK_SIZE = 2 ** 16
 ARCHIVE_FLAGS = 4
 
 HEADER = Struct(
-    'MAGIC' / Const(b'PSAR'),
-    'VERSION' / Const(Int32ub.build(VERSION)),
-    'COMPRESSION' / Const(b'zlib'),
-    'header_size' / Int32ub,
-    'ENTRY_SIZE' / Const(Int32ub.build(ENTRY_SIZE)),
-    'n_entries' / Int32ub,
-    'BLOCK_SIZE' / Const(Int32ub.build(BLOCK_SIZE)),
-    'ARCHIVE_FLAGS' / Const(Int32ub.build(ARCHIVE_FLAGS)),
-    'bom' / BOMAdapter(Bytes(this.header_size - 32)),
+    "MAGIC" / Const(b"PSAR"),
+    "VERSION" / Const(Int32ub.build(VERSION)),
+    "COMPRESSION" / Const(b"zlib"),
+    "header_size" / Int32ub,
+    "ENTRY_SIZE" / Const(Int32ub.build(ENTRY_SIZE)),
+    "n_entries" / Int32ub,
+    "BLOCK_SIZE" / Const(Int32ub.build(BLOCK_SIZE)),
+    "ARCHIVE_FLAGS" / Const(Int32ub.build(ARCHIVE_FLAGS)),
+    "bom" / BOMAdapter(Bytes(this.header_size - 32)),
 )
 
 
 def read_entry(stream, n, bom):
     entry = bom.entries[n]
     stream.seek(entry.offset)
-    zlength = bom.zlength[entry.zindex:]
+    zlength = bom.zlength[entry.zindex :]
 
     data = BytesIO()
     length = 0
@@ -81,7 +78,7 @@ def read_entry(stream, n, bom):
         length += len(chunk)
 
     data = data.getvalue()
-    assert (len(data) == entry.length)
+    assert len(data) == entry.length
     return data
 
 
@@ -90,7 +87,7 @@ def create_entry(name, data):
     output = BytesIO()
 
     for i in range(0, len(data), BLOCK_SIZE):
-        raw = data[i:i + BLOCK_SIZE]
+        raw = data[i : i + BLOCK_SIZE]
         compressed = zlib.compress(raw, zlib.Z_BEST_COMPRESSION)
         if len(compressed) < len(raw):
             output.write(compressed)
@@ -100,27 +97,27 @@ def create_entry(name, data):
             zlength.append(len(raw) % BLOCK_SIZE)
 
     return {
-        'md5': md5(name.encode()).digest() if name != '' else bytes(16),
-        'zlength': zlength,
-        'length': len(data),
-        'data': output.getvalue()
+        "md5": md5(name.encode()).digest() if name != "" else bytes(16),
+        "zlength": zlength,
+        "length": len(data),
+        "data": output.getvalue(),
     }
 
 
 def create_bom(entries):
     offset, zindex, zlength = 0, 0, []
     for entry in entries:
-        entry['offset'] = offset
-        entry['zindex'] = zindex
-        offset += len(entry['data'])
-        zindex += len(entry['zlength'])
-        zlength += entry['zlength']
+        entry["offset"] = offset
+        entry["zindex"] = zindex
+        offset += len(entry["data"])
+        zindex += len(entry["zlength"])
+        zlength += entry["zlength"]
 
     header_size = 32 + ENTRY_SIZE * len(entries) + 2 * len(zlength)
     for entry in entries:
-        entry['offset'] += header_size
+        entry["offset"] += header_size
 
-    return {'entries': entries, 'zlength': zlength, 'header_size': header_size}
+    return {"entries": entries, "zlength": zlength, "header_size": header_size}
 
 
 class PSARC(Construct):
@@ -144,19 +141,15 @@ class PSARC(Construct):
             content = encrypt_psarc(content)
 
         names = list(sorted(content.keys(), reverse=True))
-        data = ['\n'.join(names).encode()] + [content[k] for k in names]
+        data = ["\n".join(names).encode()] + [content[k] for k in names]
 
-        entries = [create_entry(n, e) for n, e in zip([''] + names, data)]
+        entries = [create_entry(n, e) for n, e in zip([""] + names, data)]
         bom = create_bom(entries)
 
         header = HEADER.build(
-            {
-                'header_size': bom['header_size'],
-                'n_entries': len(entries),
-                'bom': bom,
-            }
+            {"header_size": bom["header_size"], "n_entries": len(entries), "bom": bom}
         )
 
         stream.write(header)
         for e in entries:
-            stream.write(e['data'])
+            stream.write(e["data"])
