@@ -2,10 +2,12 @@
 Rocksmith 2014 CLI tools
 """
 
-import os
 import json
+import os
+import sys
 
-from rocksmith import PSARC, SNG
+from .psarc import PSARC
+from .sng import Song
 
 
 def path2dict(path):
@@ -45,7 +47,7 @@ def pack(directory, crypto):
 
 def print_sng(filename):
     with open(filename, "rb") as fh:
-        sng = SNG.parse_stream(fh)
+        sng = Song.parse_stream(fh)
         s = json.dumps(sng, indent=4, default=lambda _: None)
         g = "\n".join(l for l in s.splitlines() if '"_io"' not in l)
         print(g)
