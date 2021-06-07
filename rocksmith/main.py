@@ -82,9 +82,9 @@ def convert(filename):
         if path.endswith("aggregategraph.nt"):
             data = _convert(data.decode(), mac2pc)
             if mac2pc:
-                data = data.replace("macos", "dx9").encode("ascii")
+                data = data.replace("macos", "dx9").encode("utf8")
             else:
-                data = data.replace("dx9", "macos").encode("ascii")
+                data = data.replace("dx9", "macos").encode("utf8")
 
         new_content[_convert(path, mac2pc)] = data
 

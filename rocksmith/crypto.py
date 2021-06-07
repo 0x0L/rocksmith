@@ -26,10 +26,6 @@ CONFIG_KEY = bytes.fromhex(
 )
 
 
-def pad(data, blocksize=16):
-    return data + bytes((blocksize - len(data)) % blocksize)
-
-
 def decrypt_bom(data):
     decryptor = ARC_CIPHER.decryptor()
     return decryptor.update(data) + decryptor.finalize()
@@ -45,10 +41,10 @@ def aes_sng(key, iv):
 
 
 def decrypt_sng(data, key):
-    iv, data = data[8:24], data[24:-56]
+    iv, data = data[8:24], data[24:]
     decryptor = aes_sng(key, iv).decryptor()
     decrypted = decryptor.update(data) + decryptor.finalize()
-    length, payload = Int32ul.parse(decrypted[:4]), decrypted[4 : len(data)]
+    length, payload = Int32ul.parse(decrypted[:4]), decrypted[4:]
     payload = zlib.decompress(payload)
     assert len(payload) == length
     return payload
