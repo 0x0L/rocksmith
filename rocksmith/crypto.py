@@ -45,7 +45,7 @@ def decrypt_sng(data, key):
     decryptor = aes_sng(key, iv).decryptor()
     decrypted = decryptor.update(data) + decryptor.finalize()
     length, payload = Int32ul.parse(decrypted[:4]), decrypted[4:]
-    payload = zlib.decompress(payload)
+    payload = zlib.decompressobj().decompress(payload)
     assert len(payload) == length
     return payload
 
