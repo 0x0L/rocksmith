@@ -4,9 +4,9 @@ Rocksmith 2014 CLI tools
 
 import json
 import os
-import sys
 
-from .psarc import PSARC
+from .psarc import PLATFORMS, PSARC
+from .psarc import convert as psarc_convert
 from .sng import Song
 
 
@@ -53,43 +53,15 @@ def print_sng(filename):
         print(g)
 
 
-def _convert(data, mac2pc):
-    if mac2pc:
-        data = data.replace("audio/mac", "audio/windows")
-        data = data.replace("bin/macos", "bin/generic")
-    else:
-        data = data.replace("audio/windows", "audio/mac")
-        data = data.replace("bin/generic", "bin/macos")
-    return data
-
-
-def convert(filename):
-    if filename.endswith("_m.psarc"):
-        outname = filename.replace("_m.psarc", "_p.psarc")
-        mac2pc = True
-    elif filename.endswith("_p.psarc"):
-        outname = filename.replace("_p.psarc", "_m.psarc")
-        mac2pc = False
-    else:
-        print("Can only convert between MAC and PC!")
-        return
-
-    with open(filename, "rb") as fh:
-        content = PSARC().parse_stream(fh)
-
-    new_content = {}
-    for path, data in content.items():
-        if path.endswith("aggregategraph.nt"):
-            data = _convert(data.decode(), mac2pc)
-            if mac2pc:
-                data = data.replace("macos", "dx9").encode("utf8")
-            else:
-                data = data.replace("dx9", "macos").encode("utf8")
-
-        new_content[_convert(path, mac2pc)] = data
-
-    with open(outname, "wb") as fh:
-        PSARC().build_stream(new_content, fh)
+def convert(filename, platform=None):
+    if platform is None:
+        # classic pairing from the filename: _m -> pc, _p -> mac
+        if filename.endswith("_m.psarc"):
+            platform = "pc"
+        elif filename.endswith("_p.psarc"):
+            platform = "mac"
+    outname = psarc_convert(filename, platform)
+    print(outname)
 
 
 def main():
@@ -101,7 +73,8 @@ def main():
 
     parser.add_argument(
         "--no-crypto",
-        help="do not perform cryptographic operations on sng files",
+        help="do not perform cryptographic operations on sng files; pack "
+        "writes console-style plaintext archives, unpack leaves them raw",
         action="store_true",
     )
 
@@ -113,8 +86,15 @@ def main():
 
     parser.add_argument(
         "--convert",
-        help="convert a PSARC archive between MAC and PC",
+        help="convert a PSARC archive (default: _p <-> _m pairing, "
+        "console archives to PC)",
         metavar=("FILE",),
+    )
+
+    parser.add_argument(
+        "--platform",
+        help="target platform for --convert",
+        choices=sorted(PLATFORMS),
     )
 
     parser.add_argument(
@@ -129,8 +109,12 @@ def main():
     elif args.pack:
         pack(args.pack, not args.no_crypto)
     elif args.convert:
-        convert(args.convert)
+        convert(args.convert, args.platform)
     elif args.print_sng:
         print_sng(args.print_sng)
     else:
         parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

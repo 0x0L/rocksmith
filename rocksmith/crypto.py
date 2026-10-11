@@ -1,13 +1,18 @@
 import zlib
 
-from construct import Int32ul
+from construct import Int32ub, Int32ul
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+try:  # cryptography moved the legacy CFB variant to "decrepit"
+    from cryptography.hazmat.decrepit.ciphers.modes import CFB
+except ImportError:
+    from cryptography.hazmat.primitives.ciphers.modes import CFB
 
 ARC_KEY = bytes.fromhex(
     "C53DB23870A1A2F71CAE64061FDD0E1157309DC85204D4C5BFDF25090DF2572C"
 )
 ARC_IV = bytes.fromhex("E915AA018FEF71FC508132E4BB4CEB42")
-ARC_CIPHER = Cipher(algorithms.AES(ARC_KEY), modes.CFB(ARC_IV))
+ARC_CIPHER = Cipher(algorithms.AES(ARC_KEY), CFB(ARC_IV))
 
 MAC_KEY = bytes.fromhex(
     "9821330E34B91F70D0A48CBD625993126970CEA09192C0E6CDA676CC9838289D"
@@ -24,6 +29,9 @@ PRF_KEY = bytes.fromhex(
 CONFIG_KEY = bytes.fromhex(
     "378B9026EE7DE70B8AF124C1E30978670F9EC8FD5E7285A86442DD73068C0473"
 )
+
+# sng container magic; console payloads keep it in the clear.
+SNG_MAGIC = 0x4A
 
 
 def decrypt_bom(data):
@@ -60,22 +68,60 @@ def encrypt_sng(data, key):
     return header + iv + encrypted + bytes(56)
 
 
-def decrypt_psarc(content):
-    # TODO: profile, config
+def wrap_sng_console(data, endian="<"):
+    """Wrap a track payload in the plaintext '4a' container used by
+    console (flags == 0) archives: u32 magic, u32 version, u32 size,
+    then a zlib stream. X360/PS3 store the header big-endian."""
+    def u32(value):
+        return Int32ul.build(value) if endian == "<" else Int32ub.build(value)
+
+    return u32(SNG_MAGIC) + u32(1) + u32(len(data)) + zlib.compress(
+        data, zlib.Z_BEST_COMPRESSION
+    )
+
+
+def unwrap_sng_console(data):
+    """Inverse of wrap_sng_console; the header endianness is read from
+    the magic itself. Payloads without the container pass through."""
+    if data[:4] not in (b"\x4a\x00\x00\x00", b"\x00\x00\x00\x4a"):
+        return data
+
+    endian = "<" if data[0] == SNG_MAGIC else ">"
+    def u32(raw):
+        return (Int32ul if endian == "<" else Int32ub).parse(raw)
+
+    length = u32(data[8:12])
+    payload = zlib.decompressobj().decompress(data[12:])
+    assert len(payload) == length
+    return payload
+
+
+def decrypt_psarc(content, flags=4):
+    """Unwrap sng payloads. flags != 0: PC/Mac AES-CTR containers.
+    flags == 0: console plaintext containers, no keys involved.
+    TODO: profile, config"""
     content = content.copy()
     for k in content:
-        if "songs/bin/macos/" in k:
+        if flags == 0:
+            if k.startswith("songs/bin/"):
+                content[k] = unwrap_sng_console(content[k])
+        elif "songs/bin/macos/" in k:
             content[k] = decrypt_sng(content[k], MAC_KEY)
         elif "songs/bin/generic/" in k:
             content[k] = decrypt_sng(content[k], WIN_KEY)
     return content
 
 
-def encrypt_psarc(content):
-    # TODO: profile, config
+def encrypt_psarc(content, flags=4, endian="<"):
+    """Wrap sng payloads for the target flags/endian; see
+    decrypt_psarc for the container layouts.
+    TODO: profile, config"""
     content = content.copy()
     for k in content:
-        if "songs/bin/macos/" in k:
+        if flags == 0:
+            if k.startswith("songs/bin/"):
+                content[k] = wrap_sng_console(content[k], endian)
+        elif "songs/bin/macos/" in k:
             content[k] = encrypt_sng(content[k], MAC_KEY)
         elif "songs/bin/generic/" in k:
             content[k] = encrypt_sng(content[k], WIN_KEY)
