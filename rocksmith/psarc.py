@@ -102,7 +102,7 @@ PLATFORMS = {
     "xbox": dict(audio="audio/xbox360", bin="songs/bin/xbox360", flags=0,
                  token="xbox360", suffix="_x", be=True),
     "ps3": dict(audio="audio/ps3", bin="songs/bin/ps3", flags=0,
-                token="ps3", suffix="", be=True),
+                token="ps3", suffix="_ps3", be=True),
     "ps4": dict(audio="audio/generic", bin="songs/bin/generic", flags=0,
                 token="dx9", suffix="_ps4", be=False),
 }
