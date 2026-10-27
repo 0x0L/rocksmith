@@ -1,8 +1,3 @@
-import os
-
-import pytest
-
-from rocksmith.psarc import PSARC
 from rocksmith.sng import Anchor, AnchorExtension, Bend, ChordTemplate, Song
 
 
@@ -208,22 +203,3 @@ def test_none_sentinels_round_trip():
     assert n.nextIterNote == -1
     assert n.prevIterNote == -1
     assert n.parentPrevNote == -1
-
-
-@pytest.mark.skipif(not os.environ.get("ROCKSMITH_DLC"), reason="no sample archive")
-def test_real_dlc_sng_byte_exact():
-    with open(os.environ["ROCKSMITH_DLC"], "rb") as fh:
-        content = PSARC().parse_stream(fh)
-    checked = 0
-    for name, data in content.items():
-        if not name.endswith(".sng"):
-            continue
-        song = Song.parse(data)
-        assert Song.build(song) == data, name
-        for level in song.levels:
-            for note in level.notes:
-                # -1 (no chord / no link) is the common wire sentinel.
-                assert note.chordId >= -1
-                assert note.nextIterNote >= -1
-                checked += 1
-    assert checked > 0

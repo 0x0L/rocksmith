@@ -87,6 +87,7 @@ def unwrap_sng_console(data):
         return data
 
     endian = "<" if data[0] == SNG_MAGIC else ">"
+
     def u32(raw):
         return (Int32ul if endian == "<" else Int32ub).parse(raw)
 
@@ -96,14 +97,25 @@ def unwrap_sng_console(data):
     return payload
 
 
+def is_console_chart(key):
+    """True for the SNG charts the plaintext "4a" container wraps: .sng
+    files under songs/bin/. aggregategraph.nt sits there too in some
+    layouts, but it is a node graph and stays raw."""
+    return key.startswith("songs/bin/") and key.endswith(".sng")
+
+
 def decrypt_psarc(content, flags=4):
     """Unwrap sng payloads. flags != 0: PC/Mac AES-CTR containers.
-    flags == 0: console plaintext containers, no keys involved.
+    flags == 0: console plaintext containers, no keys involved. An empty
+    entry holds no container: official DLC ships one, an arrangement the
+    song never uses, and it has to stay empty rather than fail to unwrap.
     TODO: profile, config"""
     content = content.copy()
     for k in content:
+        if not content[k]:
+            continue
         if flags == 0:
-            if k.startswith("songs/bin/"):
+            if is_console_chart(k):
                 content[k] = unwrap_sng_console(content[k])
         elif "songs/bin/macos/" in k:
             content[k] = decrypt_sng(content[k], MAC_KEY)
@@ -114,12 +126,14 @@ def decrypt_psarc(content, flags=4):
 
 def encrypt_psarc(content, flags=4, endian="<"):
     """Wrap sng payloads for the target flags/endian; see
-    decrypt_psarc for the container layouts.
+    decrypt_psarc for the container layouts and for empty entries.
     TODO: profile, config"""
     content = content.copy()
     for k in content:
+        if not content[k]:
+            continue
         if flags == 0:
-            if k.startswith("songs/bin/"):
+            if is_console_chart(k):
                 content[k] = wrap_sng_console(content[k], endian)
         elif "songs/bin/macos/" in k:
             content[k] = encrypt_sng(content[k], MAC_KEY)
