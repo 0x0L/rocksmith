@@ -6,7 +6,13 @@ import json
 import os
 import sys
 
-from .psarc import PSARC
+from .psarc import (
+    PLATFORMS,
+    PSARC,
+    convert as psarc_convert,
+    detect_platform,
+    read_source,
+)
 from .sng import Song
 
 
@@ -41,8 +47,11 @@ def unpack(filename, crypto):
 def pack(directory, crypto):
     content = path2dict(directory)
     dest = os.path.basename(directory) + ".psarc"
+    # X360/PS3 store the plaintext container header big-endian
+    source = detect_platform(content, flags=0)
+    endian = "<" if crypto else PLATFORMS[source]["endian"]
     with open(dest, "wb") as fh:
-        PSARC(crypto).build_stream(content, fh)
+        PSARC(crypto, endian=endian).build_stream(content, fh)
 
 
 def print_sng(filename):
@@ -53,43 +62,17 @@ def print_sng(filename):
         print(g)
 
 
-def _convert(data, mac2pc):
-    if mac2pc:
-        data = data.replace("audio/mac", "audio/windows")
-        data = data.replace("bin/macos", "bin/generic")
-    else:
-        data = data.replace("audio/windows", "audio/mac")
-        data = data.replace("bin/generic", "bin/macos")
-    return data
-
-
-def convert(filename):
-    if filename.endswith("_m.psarc"):
-        outname = filename.replace("_m.psarc", "_p.psarc")
-        mac2pc = True
-    elif filename.endswith("_p.psarc"):
-        outname = filename.replace("_p.psarc", "_m.psarc")
-        mac2pc = False
-    else:
-        print("Can only convert between MAC and PC!")
-        return
-
-    with open(filename, "rb") as fh:
-        content = PSARC().parse_stream(fh)
-
-    new_content = {}
-    for path, data in content.items():
-        if path.endswith("aggregategraph.nt"):
-            data = _convert(data.decode(), mac2pc)
-            if mac2pc:
-                data = data.replace("macos", "dx9").encode("utf8")
-            else:
-                data = data.replace("dx9", "macos").encode("utf8")
-
-        new_content[_convert(path, mac2pc)] = data
-
-    with open(outname, "wb") as fh:
-        PSARC().build_stream(new_content, fh)
+def convert(filename, platform):
+    _, src = read_source(filename)
+    if src == platform:
+        # not an error: rebuilding an archive on its own platform is a
+        # legitimate renormalization, but rarely what was meant
+        print(
+            "warning: %s already contains %s data" % (filename, platform),
+            file=sys.stderr,
+        )
+    outname = psarc_convert(filename, platform)
+    print(outname)
 
 
 def main():
@@ -101,7 +84,8 @@ def main():
 
     parser.add_argument(
         "--no-crypto",
-        help="do not perform cryptographic operations on sng files",
+        help="do not perform cryptographic operations on sng files: pack "
+        "writes a console-style plaintext archive",
         action="store_true",
     )
 
@@ -113,8 +97,14 @@ def main():
 
     parser.add_argument(
         "--convert",
-        help="convert a PSARC archive between MAC and PC",
+        help="convert a PSARC archive to --platform",
         metavar=("FILE",),
+    )
+
+    parser.add_argument(
+        "--platform",
+        help="target platform for --convert",
+        choices=sorted(PLATFORMS),
     )
 
     parser.add_argument(
@@ -129,8 +119,14 @@ def main():
     elif args.pack:
         pack(args.pack, not args.no_crypto)
     elif args.convert:
-        convert(args.convert)
+        if not args.platform:
+            parser.error("--convert requires --platform")
+        convert(args.convert, args.platform)
     elif args.print_sng:
         print_sng(args.print_sng)
     else:
         parser.print_help()
+
+
+if __name__ == "__main__":
+    main()
